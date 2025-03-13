@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Control de Horas Chimba Pizza</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif, Poppins;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #d1d0d0;
+}
+
+        
+        h1 {
+            text-align: center;
+            color: #ce0000;
+            margin-bottom: 30px;
+            box-shadow: #2196F3;
+        }
+        .employee-buttons {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        .employee-button {
+            background-color: #4CAF50;
+            border: none;
+            color: white;
+            padding: 15px 0;
+            text-align: center;
+            font-size: 18px;
+            cursor: pointer;
+            border-radius: 5px;
+            transition: background-color 0.3s;
+        }
+        .employee-button:hover {
+            background-color: #3e8e41;
+        }
+        .active {
+            background-color: #f44336;
+        }
+        .active:hover {
+            background-color: #d32f2f;
+        }
+        .clock {
+            font-size: 24px;
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 15px;
+            background-color: #cc0000;
+            color: white;
+            border-radius: 5px;
+        }
+        .records {
+            background-color: white;
+            padding: 15px;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .record {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+        }
+        .record:last-child {
+            border-bottom: none;
+        }
+        #status {
+            text-align: center;
+            margin: 20px 0;
+            padding: 10px;
+            border-radius: 30px;
+        }
+        .success {
+            background-color: #dff0d8;
+            color: #3c763d;
+        }
+        .error {
+            background-color: #f2dede;
+            color: #a94442;
+        }
+        #date {
+            text-align: center;
+            font-size: 18px;
+            margin-bottom: 15px;
+        }
+        .action-buttons {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+        .action-button {
+            background-color: #2196F3;
+            border: none;
+            color: white;
+            padding: 10px 15px;
+            text-align: center;
+            font-size: 16px;
+            cursor: pointer;
+            border-radius: 5px;
+            margin: 0 10px;
+            transition: background-color 0.3s;
+        }
+        .action-button:hover {
+            background-color: #0b7dda;
+        }
+    </style>
+</head>
+<body>
+    <h1>Control de Horas Chimba Pizza</h1>
+    
+    <div id="date"></div>
+    <div class="clock" id="clock"></div>
+    
+    <div class="employee-buttons">
+        <button class="employee-button" data-employee="Adolfo">Adolfo 🧑</button>
+        <button class="employee-button" data-employee="Sailyn">Sailyn 👧</button>
+        <button class="employee-button" data-employee="Carlos">Carlos 👨‍🦱</button>
+        <button class="employee-button" data-employee="Senaida">Senaida 👩‍🦱</button>
+        <button class="employee-button" data-employee="Everson">Everson 👨‍💻</button>
+    </div>
+    
+    <div id="status"></div>
+    
+    <div class="records">
+        <h2>Registros de hoy:</h2>
+        <div id="today-records"></div>
+    </div>
+    
+    <div class="action-buttons">
+        <button id="download-csv" class="action-button">Descargar CSV</button>
+    </div>
+    
+    <script>
+        // Estado para seguir quién está trabajando
+        const activeEmployees = {};
+        
+        // Array para almacenar todos los registros
+        const allRecords = [];
+        
+        // Función para actualizar el reloj
+        function updateClock() {
+            const now = new Date();
+            const timeString = now.toLocaleTimeString('es-ES');
+            document.getElementById('clock').textContent = timeString;
+            
+            // Actualizar la fecha
+            const dateOptions = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+            const dateString = now.toLocaleDateString('es-ES', dateOptions);
+            document.getElementById('date').textContent = dateString;
+        }
+        
+        // Actualizar el reloj cada segundo
+        setInterval(updateClock, 1000);
+        updateClock(); // Inicializar el reloj
+        
+        // Agregar eventos a los botones de empleados
+        document.querySelectorAll('.employee-button').forEach(button => {
+            button.addEventListener('click', function() {
+                const employeeName = this.dataset.employee;
+                const now = new Date();
+                const formattedDateTime = formatDateTime(now);
+                
+                if (this.classList.contains('active')) {
+                    // Registrar hora de salida
+                    const startTime = new Date(activeEmployees[employeeName]);
+                    const hoursWorked = calculateHoursWorked(startTime, now);
+                    
+                    // Crear registro para almacenar
+                    const record = {
+                        employee: employeeName,
+                        startTime: formatDateTime(startTime),
+                        endTime: formattedDateTime,
+                        hoursWorked: hoursWorked
+                    };
+                    
+                    // Almacenar el registro
+                    allRecords.push(record);
+                    
+                    // Enviar los datos a Google Sheets
+                    sendToGoogleSheets(employeeName, activeEmployees[employeeName], formattedDateTime, hoursWorked);
+                    
+                    // Actualizar la UI
+                    this.classList.remove('active');
+                    delete activeEmployees[employeeName];
+                    addRecordToUI(employeeName, startTime, now, hoursWorked);
+                    
+                    showStatus(`${employeeName} ha registrado su salida. Horas trabajadas: ${hoursWorked}`, 'success');
+                } else {
+                    // Registrar hora de entrada
+                    this.classList.add('active');
+                    activeEmployees[employeeName] = now.toISOString();
+                    
+                    showStatus(`${employeeName} ha registrado su entrada a las ${formatTime(now)}`, 'success');
+                }
+                
+                // Guardar registros en localStorage
+                saveRecordsToLocalStorage();
+            });
+        });
+        
+        // Evento para descargar CSV
+        document.getElementById('download-csv').addEventListener('click', function() {
+            downloadCSV();
+        });
+        
+        // Función para calcular horas trabajadas
+        function calculateHoursWorked(startTime, endTime) {
+            const diffMs = endTime - startTime;
+            const diffHrs = diffMs / (1000 * 60 * 60);
+            return diffHrs.toFixed(2);
+        }
+        
+        // Función para formatear la fecha y hora como se requiere
+        function formatDateTime(date) {
+            const day = date.getDate().toString().padStart(2, '0');
+            const month = (date.getMonth() + 1).toString().padStart(2, '0');
+            const year = date.getFullYear();
+            const hours = date.getHours().toString().padStart(2, '0');
+            const minutes = date.getMinutes().toString().padStart(2, '0');
+            const seconds = date.getSeconds().toString().padStart(2, '0');
+            
+            return `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
+        }
+        
+        // Función para formatear solo la hora
+        function formatTime(date) {
+            return date.toLocaleTimeString('es-ES');
+        }
+        
+        // Función para mostrar mensajes de estado
+        function showStatus(message, type) {
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = message;
+            statusEl.className = type;
+            
+            // Ocultar después de 5 segundos
+            setTimeout(() => {
+                statusEl.textContent = '';
+                statusEl.className = '';
+            }, 5000);
+        }
+        
+        // Función para agregar registros a la interfaz
+        function addRecordToUI(employee, startTime, endTime, hoursWorked) {
+            const recordsContainer = document.getElementById('today-records');
+            const recordEl = document.createElement('div');
+            recordEl.className = 'record';
+            recordEl.innerHTML = `
+                <div><strong>${employee}</strong></div>
+                <div>${formatTime(startTime)} - ${formatTime(endTime)}</div>
+                <div>${hoursWorked} horas</div>
+            `;
+            recordsContainer.appendChild(recordEl);
+        }
+        
+        // Función para enviar datos a Google Sheets
+        function sendToGoogleSheets(employee, startDateTime, endDateTime, hoursWorked) {
+    // URL de tu script de Google Apps Script
+    const scriptURL = 'https://script.google.com/macros/s/AKfycbzHIYW5cL3GiaCQVsGhD87NRGdfC_cMqnvBTFfmLHaJZcc2jhn-MLkEvkEchtYGjmo1/exec';
+    
+    // Crear formatos de fecha consistentes
+    const formattedStartTime = formatDateTime(new Date(startDateTime));
+    
+    const data = {
+        empleado: employee,
+        horaInicio: formattedStartTime,
+        horaFin: endDateTime,
+        horasTrabajadas: hoursWorked
+    };
+    
+    console.log("Enviando datos:", data); // Para depuración
+    
+    fetch(scriptURL, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(data),
+        mode: 'no-cors' // Añadir esta línea para evitar errores CORS
+    })
+    .then(response => {
+        // Al usar mode: 'no-cors', no podemos leer la respuesta
+        // así que asumimos éxito si llegamos aquí
+        console.log("Respuesta recibida");
+        showStatus("Datos enviados correctamente a Google Sheets", "success");
+    })
+    .catch(error => {
+        console.error("Error:", error);
+        showStatus("Error al enviar datos: " + error, "error");
+    });
+}
+        
+        // Función para guardar registros en localStorage
+        function saveRecordsToLocalStorage() {
+            localStorage.setItem('employeeRecords', JSON.stringify(allRecords));
+        }
+        
+        // Función para cargar registros desde localStorage
+        function loadRecordsFromLocalStorage() {
+            const savedRecords = localStorage.getItem('employeeRecords');
+            if (savedRecords) {
+                const parsedRecords = JSON.parse(savedRecords);
+                allRecords.length = 0; // Limpiar array actual
+                allRecords.push(...parsedRecords); // Añadir registros guardados
+                
+                // Mostrar registros en la UI
+                parsedRecords.forEach(record => {
+                    // Solo mostrar registros de hoy
+                    const recordDate = record.startTime.split(' ')[0]; // Obtener solo la fecha
+                    const today = formatDateTime(new Date()).split(' ')[0];
+                    
+                    if (recordDate === today) {
+                        addRecordToUI(
+                            record.employee, 
+                            new Date(record.startTime.split(' ')[1]), 
+                            new Date(record.endTime.split(' ')[1]), 
+                            record.hoursWorked
+                        );
+                    }
+                });
+            }
+        }
+        
+        // Función para descargar CSV
+        function downloadCSV() {
+            if (allRecords.length === 0) {
+                showStatus("No hay registros para descargar", "error");
+                return;
+            }
+            
+            // Cabecera del CSV
+            let csv = 'Empleado,Hora Inicio,Hora Fin,Horas Trabajadas\n';
+            
+            // Agregar cada registro
+            allRecords.forEach(record => {
+                csv += `${record.employee},${record.startTime},${record.endTime},${record.hoursWorked}\n`;
+            });
+            
+            // Crear blob y descargar
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+            
+            const link = document.createElement('a');
+            link.setAttribute('href', url);
+            link.setAttribute('download', `control_horas_${today}.csv`);
+            link.style.visibility = 'hidden';
+            
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            showStatus("CSV descargado correctamente", "success");
+        }
+        
+        // Verificar si hay empleados activos al cargar la página
+        window.addEventListener('load', function() {
+            // Cargar desde localStorage
+            const savedActiveEmployees = localStorage.getItem('activeEmployees');
+            if (savedActiveEmployees) {
+                const parsedData = JSON.parse(savedActiveEmployees);
+                
+                // Restaurar el estado de los botones
+                Object.entries(parsedData).forEach(([employee, startTime]) => {
+                    activeEmployees[employee] = startTime;
+                    const button = document.querySelector(`.employee-button[data-employee="${employee}"]`);
+                    if (button) {
+                        button.classList.add('active');
+                    }
+                });
+            }
+            
+            // Cargar registros guardados
+            loadRecordsFromLocalStorage();
+        });
+        
+        // Guardar estado cuando la página se cierre
+        window.addEventListener('beforeunload', function() {
+            if (Object.keys(activeEmployees).length > 0) {
+                localStorage.setItem('activeEmployees', JSON.stringify(activeEmployees));
+            } else {
+                localStorage.removeItem('activeEmployees');
+            }
+            
+            // Guardar los registros
+            saveRecordsToLocalStorage();
+        });
+    </script>
+</body>
+</html>
